@@ -1,0 +1,211 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Housing Management System</title>
+  <style>
+    :root { --primary: #1e3a8a; --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: #0f172a; margin: 0; padding: 24px; }
+    .container { max-width: 1150px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    h1 { margin: 0; color: var(--primary); }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .kpi-card { background: var(--card); padding: 18px; border-radius: 8px; border: 1px solid var(--border); }
+    .kpi-card span { font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 600; }
+    .kpi-card h2 { margin: 8px 0 0; font-size: 24px; }
+    section { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; }
+    h3 { margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { background: #f1f5f9; font-weight: 600; }
+    .badge { padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .green { background: #dcfce7; color: #166534; }
+    .yellow { background: #fef9c3; color: #854d0e; }
+    .red { background: #fee2e2; color: #991b1b; }
+    .inline-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    input, select, button { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    button { background: var(--primary); color: #fff; border: none; cursor: pointer; font-weight: 500; }
+    button.secondary { background: #475569; }
+    button.success { background: #15803d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Housing & Property Management Dashboard</h1>
+      <a href="/admin/" style="color:#1e3a8a; font-weight:600; text-decoration:none;">Admin Panel →</a>
+    </div>
+
+    <!-- KPI Summary -->
+    <div class="kpis">
+      <div class="kpi-card">
+        <span>Rent Collected (KES)</span>
+        <h2>{{ total_collected|intcomma }} / {{ total_expected|intcomma }}</h2>
+      </div>
+      <div class="kpi-card">
+        <span>Rent Arrears (KES)</span>
+        <h2 style="color:#dc2626;">{{ total_arrears|intcomma }}</h2>
+      </div>
+      <div class="kpi-card">
+        <span>Pending Compliance Items</span>
+        <h2>{{ pending_compliance }}</h2>
+      </div>
+      <div class="kpi-card">
+        <span>Active Collective Complaints</span>
+        <h2>{{ open_complaints }}</h2>
+      </div>
+    </div>
+
+    <!-- 1. Rent Payments -->
+    <section>
+      <h3>1. Rent Payments & Reconciliation</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Unit</th><th>Tenant</th><th>Month</th><th>Due (KES)</th><th>Paid (KES)</th><th>Balance</th><th>M-Pesa Ref</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td><strong>{{ p.unit }}</strong></td>
+            <td>{{ p.tenant_name }}</td>
+            <td>{{ p.month }}</td>
+            <td>{{ p.rent_due|intcomma }}</td>
+            <td>{{ p.amount_paid|intcomma }}</td>
+            <td>{{ p.balance|intcomma }}</td>
+            <td><code>{{ p.mpesa_receipt }}</code></td>
+            <td>
+              {% if p.status == "Paid" %}<span class="badge green">Paid</span>
+              {% elif p.status == "Partial" %}<span class="badge yellow">Partial</span>
+              {% else %}<span class="badge red">Overdue</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <form class="inline-form" action="{% url 'add_payment' %}" method="POST">
+        {% csrf_token %}
+        <input name="unit" placeholder="Unit (e.g. B-202)" required />
+        <input name="tenant_name" placeholder="Tenant Name" required />
+        <input name="month" value="Nov 2026" required />
+        <input name="rent_due" type="number" placeholder="Rent Due (KES)" required />
+        <input name="amount_paid" type="number" placeholder="Amount Paid (KES)" required />
+        <input name="mpesa_receipt" placeholder="M-Pesa Receipt Code" />
+        <button type="submit">+ Record Payment</button>
+      </form>
+    </section>
+
+    <!-- 2. Compliance Reports -->
+    <section>
+      <h3>2. Regulatory & Safety Compliance Reports</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Compliance Item</th><th>Category</th><th>Due Date</th><th>Notes</th><th>Status</th><th>Update</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in compliance %}
+          <tr>
+            <td><strong>{{ r.title }}</strong></td>
+            <td>{{ r.category }}</td>
+            <td>{{ r.due_date }}</td>
+            <td>{{ r.notes }}</td>
+            <td>
+              {% if r.status == 'Compliant' %}<span class="badge green">Compliant</span>
+              {% elif r.status == 'Pending' %}<span class="badge yellow">Pending</span>
+              {% else %}<span class="badge red">{{ r.status }}</span>{% endif %}
+            </td>
+            <td>
+              <form action="{% url 'update_compliance_status' r.id %}" method="POST" style="display:flex; gap:4px;">
+                {% csrf_token %}
+                <select name="status">
+                  <option value="Compliant">Compliant</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Action Required">Action Required</option>
+                </select>
+                <button type="submit" class="secondary">Save</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <form class="inline-form" action="{% url 'add_compliance' %}" method="POST">
+        {% csrf_token %}
+        <input name="title" placeholder="Report Title" required />
+        <select name="category">
+          <option>Fire Safety</option>
+          <option>Water & Sanitation</option>
+          <option>Environmental</option>
+          <option>Structural & Electrical</option>
+        </select>
+        <input name="due_date" type="date" required />
+        <select name="status">
+          <option>Pending</option>
+          <option>Compliant</option>
+          <option>Action Required</option>
+        </select>
+        <input name="notes" placeholder="Inspection notes..." />
+        <button type="submit">+ Add Compliance Report</button>
+      </form>
+    </section>
+
+    <!-- 3. Collective Tenant Complaints -->
+    <section>
+      <h3>3. Collective Common Tenant Complaints</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Common Issue</th><th>Category</th><th>Affected Units</th><th>Reported</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in complaints %}
+          <tr>
+            <td><strong>{{ c.issue_title }}</strong></td>
+            <td>{{ c.category }}</td>
+            <td><strong>{{ c.affected_units }}</strong> units</td>
+            <td>{{ c.created_at }}</td>
+            <td>
+              {% if c.status == 'Resolved' %}<span class="badge green">Resolved</span>
+              {% elif c.status == 'In Progress' %}<span class="badge yellow">In Progress</span>
+              {% else %}<span class="badge red">Open</span>{% endif %}
+            </td>
+            <td style="display:flex; gap:6px;">
+              {% if c.status != 'Resolved' %}
+              <form action="{% url 'upvote_complaint' c.id %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="secondary">+1 Unit Affected</button>
+              </form>
+              <form action="{% url 'resolve_complaint' c.id %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="success">Mark Resolved</button>
+              </form>
+              {% else %}
+              <span>—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <form class="inline-form" action="{% url 'add_complaint' %}" method="POST">
+        {% csrf_token %}
+        <input name="issue_title" placeholder="Describe common issue (e.g. Gate intercom offline)" style="min-width:280px;" required />
+        <select name="category">
+          <option>Water Supply</option>
+          <option>Sanitation</option>
+          <option>Security & Lighting</option>
+          <option>Plumbing & Electrical</option>
+          <option>Noise & Common Areas</option>
+        </select>
+        <button type="submit">+ Log Common Complaint</button>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,140 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Unit {{ profile.unit }} — Tenant Portal</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; padding: 24px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .card { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+    h3 { margin-top: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; color: #1e3a8a; }
+    input, textarea, select { width: 100%; padding: 9px; margin: 6px 0 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    button { background: #1e3a8a; color: white; border: none; padding: 10px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    button.mpesa { background: #16a34a; width: 100%; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    .alert { padding: 12px; background: #dcfce7; color: #166534; border-radius: 6px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div>
+        <h2 style="margin:0;">Room {{ profile.unit }} Portal</h2>
+        <small>Welcome, {{ request.user.get_full_name|default:request.user.username }} | Monthly Rent: <strong>KES {{ profile.monthly_rent|intcomma }}</strong></small>
+      </div>
+      <form action="{% url 'logout' %}" method="POST">
+        {% csrf_token %}
+        <button type="submit" style="background:#475569;">Logout</button>
+      </form>
+    </div>
+
+    {% for message in messages %}<div class="alert">{{ message }}</div>{% endfor %}
+
+    <div class="grid">
+      <!-- Pay Rent via M-Pesa Paybill STK Push -->
+      <div class="card">
+        <h3>Pay Rent via M-Pesa Paybill</h3>
+        <p style="font-size:13px; color:#475569;">Paybill Account Number: <strong>{{ profile.unit }}</strong></p>
+        <form action="{% url 'tenant_pay_rent' %}" method="POST">
+          {% csrf_token %}
+          <label>M-Pesa Phone Number</label>
+          <input type="text" name="phone" value="{{ profile.phone_number }}" required />
+          <label>Amount (KES)</label>
+          <input type="number" name="amount" value="{{ profile.monthly_rent }}" required />
+          <button type="submit" class="mpesa">Send M-Pesa Prompt</button>
+        </form>
+      </div>
+
+      <!-- Monthly House Service Rating -->
+      <div class="card">
+        <h3>Monthly House Service Rating ({{ current_month }})</h3>
+        <form action="{% url 'submit_monthly_feedback' %}" method="POST">
+          {% csrf_token %}
+          <input type="hidden" name="month" value="{{ current_month }}" />
+          <label>Overall Management & Maintenance (1–5 ★)</label>
+          <select name="rating">
+            <option value="5">5 - Excellent</option>
+            <option value="4">4 - Good</option>
+            <option value="3">3 - Average</option>
+            <option value="2">2 - Poor</option>
+            <option value="1">1 - Very Poor</option>
+          </select>
+          <label>Cleanliness & Garbage Collection (1–5 ★)</label>
+          <select name="cleanliness_rating">
+            <option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option>
+          </select>
+          <label>Security & Water Supply (1–5 ★)</label>
+          <select name="security_rating">
+            <option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option>
+          </select>
+          <textarea name="comments" rows="2" placeholder="Optional comments on building services..."></textarea>
+          <button type="submit">Submit Monthly Rating</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Rent Statement -->
+    <div class="card">
+      <h3>My Rent Payment History</h3>
+      <table>
+        <thead><tr><th>Month</th><th>Due</th><th>Paid</th><th>Balance</th><th>M-Pesa Receipt</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>{{ p.month }}</td>
+            <td>KES {{ p.rent_due|intcomma }}</td>
+            <td>KES {{ p.amount_paid|intcomma }}</td>
+            <td>KES {{ p.balance|intcomma }}</td>
+            <td><code>{{ p.mpesa_receipt }}</code></td>
+            <td><strong>{{ p.status }}</strong></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">No rent records found yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid">
+      <!-- Personal Room Complaints -->
+      <div class="card">
+        <h3>Personal Room Maintenance / Complaints</h3>
+        <form action="{% url 'submit_personal_complaint' %}" method="POST">
+          {% csrf_token %}
+          <input type="text" name="subject" placeholder="Issue (e.g. Leaking kitchen sink)" required />
+          <textarea name="description" rows="2" placeholder="Describe the issue inside your unit..." required></textarea>
+          <button type="submit">Report Room Issue</button>
+        </form>
+        <hr style="margin:16px 0; border:0; border-top:1px solid #e2e8f0;" />
+        {% for c in personal_complaints %}
+          <p style="font-size:14px; margin:8px 0;">
+            <strong>{{ c.subject }}</strong> — <em>{{ c.status }}</em><br />
+            <small style="color:#64748b;">{{ c.description }}</small>
+          </p>
+        {% endfor %}
+      </div>
+
+      <!-- Shared Building Issues -->
+      <div class="card">
+        <h3>Shared Building Issues (Upvote if Affected)</h3>
+        {% for cc in collective_complaints %}
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+            <div>
+              <strong>{{ cc.issue_title }}</strong><br />
+              <small>{{ cc.category }} • {{ cc.affected_units }} units affected</small>
+            </div>
+            <form action="{% url 'upvote_complaint' cc.id %}" method="POST">
+              {% csrf_token %}
+              <button type="submit" style="background:#475569; padding:6px 10px; font-size:12px;">+1 Me Too</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
